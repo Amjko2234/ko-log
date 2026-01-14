@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ko-log"
+version = "1.0.0"
+description = "An asynchronous, queue-based logging module for Python."
+readme = "README.md"
+authors = [{ name = "Amjko2234", email = "amjko2234@gmail.com" }]
+license = { file = "MIT" }
+requires-python = ">=3.14.0"
+dependencies = [
+    "aiofiles==25.1.0",
+    "dotenv==0.9.9",
+    "pydantic==2.12.5",
+    "rich==14.2.0",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Inteded Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
+]
+    
+[project.urls]
+Homepage = "https://github.com/Amjko2234/ko-log"
+Repository = "https://github.com/Amjko2234/ko-log"
+Issues = "https://github.com/Amjko2234/ko-log/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ko_log = ["py.typed"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
