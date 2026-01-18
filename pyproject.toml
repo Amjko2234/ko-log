@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ko-log"
-version = "1.0.0"
+version = "1.0.0b1"
 description = "An asynchronous, queue-based logging module for Python."
 readme = "README.md"
 authors = [{ name = "Amjko2234", email = "amjko2234@gmail.com" }]
