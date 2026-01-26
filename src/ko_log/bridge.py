@@ -34,7 +34,10 @@ from .types import (
 
 @final
 class QueueLoggerWrapper:
-    """Internal logger that actually logs. It is wrapped by `BoundLoggerBase`."""
+    """
+    Internal logger that actually logs.
+    It is wrapped by `BoundLoggerBase` to serve as the interface for logging.
+    """
 
     name: str
 
@@ -300,10 +303,16 @@ class BoundLoggerBase:
         Logs for synchronous scopes.
 
         Yields:
-            `QueueLoggerWrapper`: The current logger instance.
+            `BoundLoggerBase`: The current logger instance.
         """
-        self._sync_log(event, level, frame_count=2, **ctx)
-        yield self
+
+        self._sync_log(event, level, frame_count=5, **ctx)
+        try:
+            yield self
+        except BaseException as exc:
+            ctx["exc_info"] = exc
+            self._sync_log(event="Error in a scope", level=level, frame_count=5, **ctx)
+            raise
 
     @asynccontextmanager
     async def _async_scope(
@@ -313,11 +322,18 @@ class BoundLoggerBase:
         Logs for asynchronous scopes.
 
         Yields:
-            `QueueLoggerWrapper`: The current logger instance.
+            `BoundLoggerBase`: The current logger instance.
         """
 
-        await self._async_log(event, level, frame_count=2, **ctx)
-        yield self
+        await self._async_log(event, level, frame_count=5, **ctx)
+        try:
+            yield self
+        except BaseException as exc:
+            ctx["exc_info"] = exc
+            await self._async_log(
+                event="Error in a scope", level=level, frame_count=5, **ctx
+            )
+            raise
 
     @contextmanager
     def _sync_life(
@@ -327,7 +343,7 @@ class BoundLoggerBase:
         Logs lifecycle entry and exit for synchronous scopes.
 
         Yields:
-            `QueueLoggerWrapper`: The current logger instance.
+            `BoundLoggerBase`: The current logger instance.
         """
 
         self._sync_log(event=f"Begin: {scope}", level=level, frame_count=5, **ctx)
@@ -355,7 +371,7 @@ class BoundLoggerBase:
         Logs lifecycle entry and exit for asynchronous scopes.
 
         Yields:
-            `QueueLoggerWrapper`: The current logger instance.
+            `BoundLoggerBase`: The current logger instance.
         """
 
         await self._async_log(
