@@ -107,7 +107,7 @@ pip install -e .
 ### Requirements
 
 - Python >= 3.14
-- `aiofiles`, `dotenv`, `pydantic`, `rich`
+- [`aiofiles`](https://pypi.org/project/aiofiles/), [`dotenv`](https://pypi.org/project/python-dotenv/), [`pydantic`](https://docs.pydantic.dev/latest/), [`rich`](https://rich.readthedocs.io/en/latest/introduction.html)
 
 ---
 
