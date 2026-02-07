@@ -19,7 +19,6 @@ from .manager import QueueManager
 from .record import LogRecord
 from .types import (
     Context,
-    ContextScalar,
     EventDict,
     ExcInfo,
     LogContext,
@@ -399,7 +398,7 @@ class BoundLoggerBase:
     #   Binding methods
     # ---------------------------------------------------------------------------------
 
-    def bind(self, **new_values: ContextScalar) -> Self:
+    def bind(self, **new_values: Context) -> Self:
         """Return a new logger with `new_values` added to context."""
 
         return self.__class__(
@@ -429,7 +428,7 @@ class BoundLoggerBase:
             _ = bound_logger._context.pop(key, None)
         return bound_logger
 
-    def new(self, **new_values: ContextScalar) -> Self:
+    def new(self, **new_values: Context) -> Self:
         """
         Clear context and binds `new_values` using `bind`.
 
