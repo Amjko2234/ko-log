@@ -524,7 +524,7 @@ class BoundLoggerBase:
     def _is_exception(self, level: str, **kwargs: Context) -> ExcInfo | None:
         if level in ("ERROR", "CRITICAL"):
             return sys.exc_info()
-        elif ("exc_info" not in kwargs) and (sys.exc_info()[0] is not None):
+        elif ("exc_info" in kwargs) and (sys.exc_info()[0] is not None):
             return sys.exc_info()
         else:
             return None
