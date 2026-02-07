@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import traceback
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import cast, final
@@ -25,7 +26,8 @@ from .models.processors import (
     RichTheme,
     RichThemeConfig,
 )
-from .types import EventDict, ExcInfo, Processor, Renderer
+from .types import EventDict, ExcInfo, ExcTraceback, Processor, Renderer
+from .utils import pop_value
 
 # =====================================================================================
 #   Drop signal
@@ -92,12 +94,9 @@ def add_context_defaults(config: ProcessorConfig) -> Processor:
 
 def dict_tracebacks(config: ProcessorConfig) -> Processor:
     """
-    Converts `exc_info` tuple to a structured `dict` with traceback `frames`.
+    Converts `exc_info` tuple to a structured `dict` with optional verbose traceback.
     Removes `exc_info` after processing to avoid serialization issues.
     """
-
-    import sys
-    import traceback
 
     if (config.type != ProcessorType.DICT_TRACEBACKS) or (
         config.params.type != ProcessorType.DICT_TRACEBACKS
@@ -107,35 +106,65 @@ def dict_tracebacks(config: ProcessorConfig) -> Processor:
             service=dict_tracebacks.__name__,
         )
 
+    def format_traceback(exc_tb: ExcTraceback) -> list[str]:
+        """Separate all new lines `\\n` into actual new lines in a list."""
+
+        traceback_lines: list[str] = traceback.format_tb(tb=exc_tb)
+        formatted_lines: list[str] = []
+
+        for frame_str in traceback_lines:
+            # From:
+            # [ "...error, in line 69, for file.py\n   ^^^^^" ]
+            #
+            # To (via `json.dumps()`):
+            # [
+            #   "...error, in line 69, for file.py",
+            #   "   ^^^^^",
+            # ]
+            lines: list[str] = frame_str.split(sep="\n")
+
+            # Filter empty lines
+            filtered_lines: list[str] = []
+            for line in lines:
+                if line.strip():
+                    filtered_line: str = line.rstrip()
+                    filtered_lines.append(filtered_line)
+
+            formatted_lines.extend(filtered_lines)
+
+        return formatted_lines
+
     def processor(event_dict: EventDict) -> EventDict:
-        exc_info: ExcInfo | bool | None = event_dict.pop(  # pyright: ignore[reportAny]
-            "exc_info", None
+        exc_info: ExcInfo | None = (None, None, None)
+        exc_info = pop_value(event_dict, "exc_info", expected_type=ExcInfo)
+        verbose_tb: bool = False
+        verbose_tb = pop_value(
+            event_dict["context"],  # pyright: ignore[reportAny]
+            "verbose_exc",
+            expected_type=bool,
         )
 
-        if (exc_info is None) or (exc_info is False):
+        if exc_info is None:
             return event_dict
 
-        if exc_info is True:
-            exc_info = sys.exc_info()
         exc_type, exc_value, exc_tb = exc_info
+
         if exc_type is None:
             return event_dict
 
-        # Build structured exception dictionary
-        event_dict["exception"] = {
-            "type": exc_type.__name__,
-            "module": exc_type.__module__,
-            "message": str(exc_value),
-            "traceback": [
-                {
-                    "file": frame.filename,
-                    "line": frame.lineno,
-                    "function": frame.name,
-                    "code": frame.line,
-                }
-                for frame in traceback.extract_tb(tb=exc_tb)
-            ],
-        }
+        if verbose_tb:
+            tb_lines: list[str] = format_traceback(exc_tb)
+            event_dict["exception"] = {
+                "type": exc_type.__name__,
+                "module": exc_type.__module__,
+                "message": str(exc_value),
+                "traceback": tb_lines,
+            }
+        else:
+            event_dict["exception"] = {
+                "exc_type": exc_type,
+                "exc_value": str(exc_value),
+            }
 
         # Clear references to avoid leakage or double serialization
         del exc_info, exc_type, exc_value, exc_tb

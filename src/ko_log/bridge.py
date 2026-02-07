@@ -19,13 +19,13 @@ from .manager import QueueManager
 from .record import LogRecord
 from .types import (
     Context,
-    ContextScalar,
     EventDict,
     ExcInfo,
     LogContext,
     Processor,
     WrappedLogger,
 )
+from .utils import pop_value
 
 # =====================================================================================
 #   Base logger
@@ -346,13 +346,18 @@ class BoundLoggerBase:
             `BoundLoggerBase`: The current logger instance.
         """
 
+        _log_exc: bool = pop_value(ctx, "log_exc", expected_type=bool)
+
         self._sync_log(event=f"Begin: {scope}", level=level, frame_count=5, **ctx)
         start: float = time.perf_counter()
         try:
             yield self
         except BaseException as exc:
-            ctx["exc_info"] = exc
-            self._sync_log(event=f"Error in {scope}", level=level, frame_count=5, **ctx)
+            if _log_exc:
+                ctx["exc_info"] = exc
+                self._sync_log(
+                    event=f"Error in {scope}", level=level, frame_count=5, **ctx
+                )
             raise
         finally:
             duration: float = time.perf_counter() - start
@@ -374,6 +379,8 @@ class BoundLoggerBase:
             `BoundLoggerBase`: The current logger instance.
         """
 
+        _log_exc: bool = pop_value(ctx, "log_exc", expected_type=bool)
+
         await self._async_log(
             event=f"Begin: {scope}", level=level, frame_count=5, **ctx
         )
@@ -381,10 +388,11 @@ class BoundLoggerBase:
         try:
             yield self
         except BaseException as exc:
-            ctx["exc_info"] = exc
-            await self._async_log(
-                event=f"Error in {scope}", level=level, frame_count=5, **ctx
-            )
+            if _log_exc:
+                ctx["exc_info"] = exc
+                await self._async_log(
+                    event=f"Error in {scope}", level=level, frame_count=5, **ctx
+                )
             raise
         finally:
             duration: float = time.perf_counter() - start
@@ -399,7 +407,7 @@ class BoundLoggerBase:
     #   Binding methods
     # ---------------------------------------------------------------------------------
 
-    def bind(self, **new_values: ContextScalar) -> Self:
+    def bind(self, **new_values: Context) -> Self:
         """Return a new logger with `new_values` added to context."""
 
         return self.__class__(
@@ -429,7 +437,7 @@ class BoundLoggerBase:
             _ = bound_logger._context.pop(key, None)
         return bound_logger
 
-    def new(self, **new_values: ContextScalar) -> Self:
+    def new(self, **new_values: Context) -> Self:
         """
         Clear context and binds `new_values` using `bind`.
 
@@ -516,7 +524,7 @@ class BoundLoggerBase:
     def _is_exception(self, level: str, **kwargs: Context) -> ExcInfo | None:
         if level in ("ERROR", "CRITICAL"):
             return sys.exc_info()
-        elif ("exc_info" not in kwargs) and (sys.exc_info()[0] is not None):
+        elif ("exc_info" in kwargs) and (sys.exc_info()[0] is not None):
             return sys.exc_info()
         else:
             return None

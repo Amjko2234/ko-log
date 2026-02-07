@@ -255,15 +255,35 @@ class TestBoundLoggerIntegration:
         assert second_call["event"].startswith("End (")  # pyright: ignore[reportAny]
         assert "Data processing" in second_call["event"]
 
-    def test_sync_lifecycle_with_exception(
+    def test_sync_lifecycle_with_exception_unspecified(
         self, bound_logger_with_sink: _LoggerWithManager
     ) -> None:
-        """Test lifecycle context manager logs exception."""
+        """Test lifecycle context manager does not logs exception."""
 
         logger, wrapped_logger, _ = bound_logger_with_sink
 
         try:
             with logger.error_life("Failing operation"):
+                raise ValueError("Simulated error")
+        except ValueError:
+            pass
+
+        # Should have logged: begin and end only (not error too)
+        assert wrapped_logger.log.call_count == 2  # pyright: ignore[reportAny]
+
+        # Second call should be the end, not error!
+        error_call = wrapped_logger.log.call_args_list[1][0][0]  # pyright: ignore[reportAny]
+        assert "End" in error_call["event"]
+
+    def test_sync_lifecycle_with_exception(
+        self, bound_logger_with_sink: _LoggerWithManager
+    ) -> None:
+        """Test lifecycle context manager logs exception as specified."""
+
+        logger, wrapped_logger, _ = bound_logger_with_sink
+
+        try:
+            with logger.error_life("Failing operation", log_exc=True):
                 raise ValueError("Simulated error")
         except ValueError:
             pass
