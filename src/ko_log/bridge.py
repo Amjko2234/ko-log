@@ -25,6 +25,7 @@ from .types import (
     Processor,
     WrappedLogger,
 )
+from .utils import pop_value
 
 # =====================================================================================
 #   Base logger
@@ -345,13 +346,18 @@ class BoundLoggerBase:
             `BoundLoggerBase`: The current logger instance.
         """
 
+        _log_exc: bool = pop_value(ctx, "log_exc", expected_type=bool)
+
         self._sync_log(event=f"Begin: {scope}", level=level, frame_count=5, **ctx)
         start: float = time.perf_counter()
         try:
             yield self
         except BaseException as exc:
-            ctx["exc_info"] = exc
-            self._sync_log(event=f"Error in {scope}", level=level, frame_count=5, **ctx)
+            if _log_exc:
+                ctx["exc_info"] = exc
+                self._sync_log(
+                    event=f"Error in {scope}", level=level, frame_count=5, **ctx
+                )
             raise
         finally:
             duration: float = time.perf_counter() - start
@@ -373,6 +379,8 @@ class BoundLoggerBase:
             `BoundLoggerBase`: The current logger instance.
         """
 
+        _log_exc: bool = pop_value(ctx, "log_exc", expected_type=bool)
+
         await self._async_log(
             event=f"Begin: {scope}", level=level, frame_count=5, **ctx
         )
@@ -380,10 +388,11 @@ class BoundLoggerBase:
         try:
             yield self
         except BaseException as exc:
-            ctx["exc_info"] = exc
-            await self._async_log(
-                event=f"Error in {scope}", level=level, frame_count=5, **ctx
-            )
+            if _log_exc:
+                ctx["exc_info"] = exc
+                await self._async_log(
+                    event=f"Error in {scope}", level=level, frame_count=5, **ctx
+                )
             raise
         finally:
             duration: float = time.perf_counter() - start
