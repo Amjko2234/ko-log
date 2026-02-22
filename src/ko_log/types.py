@@ -32,9 +32,8 @@ class WrappedLogger(Protocol):
 # =====================================================================================
 
 # Generic
-Scalar: TypeAlias = str | bool | int | float | None
 JsonConfig: TypeAlias = Mapping[str, "JsonValue"] | Sequence["JsonValue"]
-JsonValue: TypeAlias = Scalar | Mapping[str, "JsonValue"] | Sequence["JsonValue"]
+JsonValue: TypeAlias = object | Mapping[str, "JsonValue"] | Sequence["JsonValue"]
 
 FileTextMode: TypeAlias = Literal["wb", "ab"]
 
@@ -46,10 +45,7 @@ ExcInfo: TypeAlias = tuple[ExcType, ExcValue, ExcTraceback]
 # Logging-based
 EventDict: TypeAlias = dict[str, Any]  # pyright: ignore[reportExplicitAny]
 
-Context: TypeAlias = (
-    Scalar | object | BaseException | Sequence["Context"] | Mapping[str, "Context"]
-)
-ContextScalar: TypeAlias = Scalar
+Context: TypeAlias = object | Sequence["Context"] | Mapping[str, "Context"]
 LogContext: TypeAlias = dict[str, Context]
 
 Renderer: TypeAlias = Callable[[EventDict], str]

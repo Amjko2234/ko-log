@@ -23,6 +23,17 @@ from ko_log.processors import (
 from ko_log.types import EventDict, ExcInfo, Processor
 
 
+@pytest.fixture()
+def event_dict_default() -> EventDict:
+    return {
+        "name": "test logger",
+        "event": "test event",
+        "level": "DEBUG",
+        "exc_info": False,
+        "context": {},
+    }
+
+
 class TestAddCallsiteParams:
     """Tests for the `add_callsite_params` processor."""
 
@@ -151,65 +162,64 @@ class TestAddContextDefaults:
 class TestDictTracebacks:
     """Tests for the `dict_tracebacks` processor."""
 
-    def test_no_exc_info_none(self, proc_dict_tracebacks: Processor) -> None:
+    def test_no_exc_info_none(
+        self,
+        event_dict_default: EventDict,
+        proc_dict_tracebacks: Processor,
+    ) -> None:
         """Test processor returns unchanged dict when `exc_info` is None."""
 
         processor: Processor = proc_dict_tracebacks
-        event_dict: EventDict = {"event": "test event"}
+        event_dict: EventDict = event_dict_default
+        event_dict["exc_info"] = None
+
+        event_dict_without_exc_info: EventDict = event_dict_default
+        _ = event_dict_without_exc_info.pop("exc_info")
 
         result: EventDict = processor(event_dict.copy())
         assert result == event_dict
         assert "exc_info" not in event_dict
         assert "exception" not in event_dict
 
-    def test_no_exc_info_false(self, proc_dict_tracebacks: Processor) -> None:
+    def test_no_exc_info_false(
+        self,
+        event_dict_default: EventDict,
+        proc_dict_tracebacks: Processor,
+    ) -> None:
         """Test processor returns unchanged dict when `exc_info` is False."""
 
         processor: Processor = proc_dict_tracebacks
-        event_dict: EventDict = {
-            "event": "test event",
-            "exc_info": False,
-        }
+        event_dict: EventDict = event_dict_default
+        # Logger converts user-input "exc_info" to either `ExcInfo` or `None`
+        # Assume `"exc_info"=False` was converted into `"exc_info"=None`
+        event_dict["exc_info"] = None
 
         result: EventDict = processor(event_dict.copy())
         # Should be removed
         assert "exc_info" not in result
         assert "exception" not in result
 
-    def test_exc_info_true_with_no_exception(
-        self, proc_dict_tracebacks: Processor
-    ) -> None:
-        """Test processor handles `exc_info=True` when no exception is active."""
-
-        processor: Processor = proc_dict_tracebacks
-        event_dict: EventDict = {
-            "event": "test event",
-            "exc_info": True,
-        }
-
-        result: EventDict = processor(event_dict.copy())
-        assert "exc_info" not in result
-        assert "exception" not in result
-
     def test_exc_info_tuple_with_no_exception(
-        self, proc_dict_tracebacks: Processor
+        self,
+        event_dict_default: EventDict,
+        proc_dict_tracebacks: Processor,
     ) -> None:
         """Test processor handles `exc_info` tuple with `None` values."""
 
         processor: Processor = proc_dict_tracebacks
-        event_dict: EventDict = {
-            "event": "test event",
-            "exc_info": (None, None, None),
-        }
+        event_dict: EventDict = event_dict_default
+        event_dict["exc_info"] = (None, None, None)
 
         result: EventDict = processor(event_dict.copy())
         assert "exc_info" not in result
         assert "exception" not in result
 
-    def test_exc_info_tuple_with_exception(
-        self, proc_dict_tracebacks: Processor
+    def test_exc_info_tuple_with_nonverbose_exception(
+        self,
+        event_dict_default: EventDict,
+        proc_dict_tracebacks: Processor,
     ) -> None:
-        """Test processor converts exception tuple to a structured dict."""
+        """Test processor converts exception tuple to a non-verbose structured dict."""
 
         try:
             raise ValueError("Test error message")
@@ -218,10 +228,47 @@ class TestDictTracebacks:
             exc_info: ExcInfo = sys.exc_info()
 
         processor: Processor = proc_dict_tracebacks
-        event_dict: EventDict = {
-            "event": "test event",
-            "exc_info": exc_info,
-        }
+        event_dict: EventDict = event_dict_default
+        event_dict["exc_info"] = exc_info
+        event_dict["context"]["verbose_exc"] = False
+
+        result: EventDict = processor(event_dict.copy())
+        # Exception structure should look like:
+        #   "exception": {
+        #       "exc_type": "builtins.ValueError"
+        #       "exc_value": "Test error message"
+        #   }
+        assert "exc_info" not in result
+
+        # Verify exception structure was generated
+        assert "exception" in result
+        exc_dict: object = result["exception"]  # pyright: ignore[reportAny]
+        assert isinstance(exc_dict, dict)
+
+        # Verify exception type and message
+        assert exc_dict["exc_type"] is ValueError
+        assert "Test error message" in exc_dict["exc_value"]
+
+        # Verify traceback is not included in the structure
+        assert "traceback" not in exc_dict
+
+    def test_exc_info_tuple_with_verbose_exception(
+        self,
+        event_dict_default: EventDict,
+        proc_dict_tracebacks: Processor,
+    ) -> None:
+        """Test processor converts exception tuple to a verbose structured dict."""
+
+        try:
+            raise ValueError("Test error message")
+
+        except ValueError:
+            exc_info: ExcInfo = sys.exc_info()
+
+        processor: Processor = proc_dict_tracebacks
+        event_dict: EventDict = event_dict_default
+        event_dict["exc_info"] = exc_info
+        event_dict["context"]["verbose_exc"] = True
 
         result: EventDict = processor(event_dict.copy())
         # Exception structure should look like:
@@ -230,10 +277,7 @@ class TestDictTracebacks:
         #       "module": "builtins"
         #       "message": "Test error message"
         #       "traceback": [
-        #           "file": ...,
-        #           "line": ...,
-        #           "function": ...,
-        #           "code": ...,
+        #           "...traceback lines..."
         #       ]
         #   }
         assert "exc_info" not in result
@@ -248,47 +292,11 @@ class TestDictTracebacks:
         assert exc_dict["module"] == "builtins"
         assert exc_dict["message"] == "Test error message"
 
-        # Verify traceback structure
+        # Verify traceback structure exists
         assert "traceback" in exc_dict
         traceback_frames: object = exc_dict["traceback"]  # pyright: ignore[reportUnknownVariableType]
         assert isinstance(traceback_frames, list)
         assert len(traceback_frames) > 0  # pyright: ignore[reportUnknownArgumentType]
-
-        # Verify frame structure
-        for frame in traceback_frames:  # pyright: ignore[reportUnknownVariableType]
-            assert "file" in frame
-            assert "line" in frame
-            assert "function" in frame
-            assert "code" in frame
-
-    def test_exc_info_true_with_exception(
-        self, proc_dict_tracebacks: Processor
-    ) -> None:
-        """Test processor converts exception tuple to a structured dict."""
-
-        try:
-            raise ValueError("Test error message")
-
-        except ValueError:
-            processor: Processor = proc_dict_tracebacks
-            event_dict: EventDict = {
-                "event": "test event",
-                "exc_info": True,
-            }
-
-            result: EventDict = processor(event_dict.copy())
-            assert "exc_info" not in result
-
-            # Verify exception structure was generated
-            assert "exception" in result
-            exc_dict: object = result["exception"]  # pyright: ignore[reportAny]
-            assert isinstance(exc_dict, dict)
-
-            # Verify exception type and message
-            assert exc_dict["type"] == "ValueError"
-            assert exc_dict["module"] == "builtins"
-            assert exc_dict["message"] == "Test error message"
-            assert "traceback" in exc_dict
 
     def test_incorrect_processor_config_raises(self) -> None:
         """Test processor raises if it receives invalid configuration data."""
