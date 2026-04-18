@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping, Sequence
 from types import TracebackType
 from typing import Any, Literal, Protocol, TypeAlias, runtime_checkable

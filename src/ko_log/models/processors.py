@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import enum
 from collections.abc import Mapping
 from typing import ClassVar, Literal, TypeAlias
